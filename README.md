@@ -129,18 +129,20 @@ pip install -r requirements.txt
 
 ### 2 · Train the model
 
-Provide a CSV with columns matching the output of `FeatureEngineer.compute_features()`
-plus a `mid_price` column (and optionally a `timestamp` column for the index):
+Open **`train.py`** in your IDE and press the ▶ **Run** button, or from the terminal:
 
 ```bash
-python scripts/train.py --input historical_features.csv
+python train.py --input historical_features.csv
 ```
 
-This saves the trained model to `models/bofa_a1_tera_xgb.pkl` by default.
+The CSV must have feature columns (from `FeatureEngineer`) plus a `mid_price` column
+(and optionally a `timestamp` column used as the index).  The trained model is saved to
+`models/bofa_a1_tera_xgb.pkl` by default.
+
 All options:
 
 ```
-python scripts/train.py --help
+python train.py --help
 
   --input   / -i  Path to the feature CSV (required)
   --output  / -o  Model output path  (default: models/bofa_a1_tera_xgb.pkl)
@@ -153,14 +155,18 @@ python scripts/train.py --help
 
 ### 3 · Run the bot
 
+Set environment variables, then open **`run.py`** in your IDE and press ▶ **Run**.
+
 ```bash
+# Set your credentials (required for a live feed)
 export MATRIKS_WS_URI="wss://ws.matriksiq.com/v2/stream"
 export MATRIKS_API_KEY="<your-key>"
-export BIST_SYMBOLS="GARAN,AKBNK"
-# optional — omit to use the NullBroker stub (no real orders)
-export BROKER_API_CLASS="mybroker.api.BrokerClient"
 
-python -m bist_bot.main
+# Optional — defaults are shown
+export BIST_SYMBOLS="GARAN,AKBNK"
+export BROKER_API_CLASS="mybroker.api.BrokerClient"  # omit → NullBroker stub
+
+python run.py
 ```
 
 ### 4 · Run tests
