@@ -96,7 +96,7 @@ def _get_portfolio_value() -> float:
 
     Replace this stub with a live call to your broker account API.
     """
-    return float(os.environ.get("PORTFOLIO_VALUE_TRY", "1_000_000"))
+    return float(os.environ.get("PORTFOLIO_VALUE_TRY", "1000000"))
 
 
 # ---------------------------------------------------------------------------
