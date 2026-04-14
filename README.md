@@ -121,41 +121,55 @@ bracket orders for automatic stop/TP management.
 - Matriks IQ / IdealData API key with `broker_distribution` channel access
 - A broker SDK that exposes `submit_order`, `cancel_order`, `submit_bracket`
 
-### Install
+### 1 · Install
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Train the model
+### 2 · Train the model
 
-Provide a CSV with columns matching the output of `FeatureEngineer.compute_features()`
-plus a `mid_price` column, then:
-
-```python
-import pandas as pd
-from bist_bot.ml.trainer import SignalModelTrainer
-
-df = pd.read_csv("historical_features.csv", index_col="timestamp", parse_dates=True)
-trainer = SignalModelTrainer(forward_horizon_sec=60)
-X, y = trainer.build_dataset(df.drop(columns=["mid_price"]), df["mid_price"])
-trainer.train(X, y)
-trainer.save("models/bofa_a1_tera_xgb.pkl")
-```
-
-### Run the bot
+Open **`train.py`** in your IDE and press the ▶ **Run** button, or from the terminal:
 
 ```bash
-export MATRIKS_WS_URI="wss://ws.matriksiq.com/v2/stream"
-export MATRIKS_API_KEY="<your-key>"
-export BROKER_API_CLASS="mybroker.api.BrokerClient"  # omit to use NullBroker stub
-export BIST_SYMBOLS="GARAN,AKBNK"
-export MODEL_PATH="models/bofa_a1_tera_xgb.pkl"
-
-python -m bist_bot.main
+python train.py --input historical_features.csv
 ```
 
-### Run tests
+The CSV must have feature columns (from `FeatureEngineer`) plus a `mid_price` column
+(and optionally a `timestamp` column used as the index).  The trained model is saved to
+`models/bofa_a1_tera_xgb.pkl` by default.
+
+All options:
+
+```
+python train.py --help
+
+  --input   / -i  Path to the feature CSV (required)
+  --output  / -o  Model output path  (default: models/bofa_a1_tera_xgb.pkl)
+  --horizon       Forward-look window in seconds  (default: 60)
+  --n-splits      Walk-forward CV folds  (default: 5)
+```
+
+> **Note:** if no model file is found at startup, the bot runs in *signal-free*
+> mode (all signals are `FLAT`) so you can verify connectivity before training.
+
+### 3 · Run the bot
+
+Set environment variables, then open **`run.py`** in your IDE and press ▶ **Run**.
+
+```bash
+# Set your credentials (required for a live feed)
+export MATRIKS_WS_URI="wss://ws.matriksiq.com/v2/stream"
+export MATRIKS_API_KEY="<your-key>"
+
+# Optional — defaults are shown
+export BIST_SYMBOLS="GARAN,AKBNK"
+export BROKER_API_CLASS="mybroker.api.BrokerClient"  # omit → NullBroker stub
+
+python run.py
+```
+
+### 4 · Run tests
 
 ```bash
 pip install pytest

@@ -207,4 +207,12 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # When the file is run directly (e.g. from an IDE "Run" button or
+    # `python bist_bot/main.py`), make sure the project root is on sys.path
+    # so that `import bist_bot.*` resolves correctly.
+    import pathlib as _pathlib
+    _project_root = str(_pathlib.Path(__file__).parent.parent)
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
+
     main()

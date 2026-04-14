@@ -42,12 +42,22 @@ class SignalGenerator:
         threshold_buy: float = 0.62,
         threshold_sell: float = 0.38,
     ) -> None:
-        bundle = joblib.load(model_path)
-        self._model = bundle["model"]
-        self._scaler = bundle["scaler"]
+        model_path = Path(model_path)
+        self._model = None
+        self._scaler = None
+        if model_path.exists():
+            bundle = joblib.load(model_path)
+            self._model = bundle["model"]
+            self._scaler = bundle["scaler"]
+            logger.info("SignalGenerator loaded model from %s", model_path)
+        else:
+            logger.warning(
+                "Model file not found: %s — all signals will be FLAT. "
+                "Train a model first with: python scripts/train.py --input <data.csv>",
+                model_path,
+            )
         self.threshold_buy = threshold_buy
         self.threshold_sell = threshold_sell
-        logger.info("SignalGenerator loaded model from %s", model_path)
 
     # ------------------------------------------------------------------
     # Public API
@@ -69,6 +79,10 @@ class SignalGenerator:
         """
         X = pd.DataFrame([features])
         X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
+
+        if self._model is None or self._scaler is None:
+            return {"signal": "FLAT", "confidence": 0.5}
+
         X_scaled = self._scaler.transform(X)
 
         proba_up = float(self._model.predict_proba(X_scaled)[0, 1])
