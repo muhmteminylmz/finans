@@ -133,7 +133,7 @@ async def run(symbol: str) -> None:
         fe.ingest(tick)
         features = fe.compute_features()
         signal = signal_gen.generate(features)
-        if signal.get("signal") != "FLAT":
+        if isinstance(signal, dict) and signal.get("signal") not in ("FLAT", None):
             exec_engine.execute(
                 signal=signal,
                 symbol=symbol,
