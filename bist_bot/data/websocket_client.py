@@ -20,6 +20,7 @@ Usage example::
 import asyncio
 import json
 import logging
+import time
 from dataclasses import asdict
 
 import redis.asyncio as aioredis
@@ -38,6 +39,13 @@ _RECONNECT_MAX_DELAY: float = 60.0
 _STREAM_KEY_TPL = "broker_ticks:{symbol}"
 # Maximum number of entries kept in each Redis stream (FIFO eviction).
 _STREAM_MAXLEN = 100_000
+
+# WebSocket keepalive settings.
+_WS_PING_INTERVAL: float = 20.0   # seconds between pings
+_WS_PING_TIMEOUT: float = 20.0    # seconds to wait for pong
+
+# How often (in ticks) to log throughput stats.
+_STATS_LOG_INTERVAL: int = 1000
 
 
 class MatriksWebSocketClient:
@@ -68,6 +76,10 @@ class MatriksWebSocketClient:
         self._on_tick = on_tick
         self._redis: aioredis.Redis | None = None
 
+        # Live throughput stats.
+        self._tick_count: int = 0
+        self._stats_start: float = 0.0
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -94,8 +106,15 @@ class MatriksWebSocketClient:
 
     async def _connect_once(self) -> None:
         headers = {"Authorization": f"Bearer {self._api_key}"}
-        async with websockets.connect(self.uri, additional_headers=headers) as ws:
+        async with websockets.connect(
+            self.uri,
+            additional_headers=headers,
+            ping_interval=_WS_PING_INTERVAL,
+            ping_timeout=_WS_PING_TIMEOUT,
+        ) as ws:
             logger.info("WebSocket connected to %s", self.uri)
+            self._stats_start = time.monotonic()
+            self._tick_count = 0
             await self._subscribe(ws)
             async for raw in ws:
                 await self._handle_message(raw)
@@ -139,14 +158,35 @@ class MatriksWebSocketClient:
             await self._dead_letter(raw)
             return
 
-        # Persist to Redis Stream.
+        # Persist to Redis Stream with error handling for transient failures.
         stream_key = _STREAM_KEY_TPL.format(symbol=tick.symbol)
-        await self._redis.xadd(stream_key, asdict(tick), maxlen=_STREAM_MAXLEN)
+        try:
+            await self._redis.xadd(stream_key, asdict(tick), maxlen=_STREAM_MAXLEN)
+        except (aioredis.ConnectionError, aioredis.TimeoutError) as exc:
+            logger.error("Redis write failed (tick will be lost): %s", exc)
 
-        # Fire optional downstream callback.
+        # Fire optional downstream callback (errors are logged, not re-raised,
+        # so a bad callback never tears down the WebSocket connection).
         if self._on_tick is not None:
-            await self._on_tick(tick)
+            try:
+                await self._on_tick(tick)
+            except Exception:
+                logger.exception("on_tick callback raised — continuing.")
+
+        # Periodic throughput logging for live monitoring.
+        self._tick_count += 1
+        if self._tick_count % _STATS_LOG_INTERVAL == 0:
+            elapsed = time.monotonic() - self._stats_start
+            tps = self._tick_count / elapsed if elapsed > 0 else 0.0
+            logger.info(
+                "Live stats: %d ticks processed, %.1f ticks/sec",
+                self._tick_count,
+                tps,
+            )
 
     async def _dead_letter(self, raw: str) -> None:
         """Push unparseable messages to a dead-letter stream for inspection."""
-        await self._redis.xadd("broker_ticks:dead_letter", {"raw": raw}, maxlen=10_000)
+        try:
+            await self._redis.xadd("broker_ticks:dead_letter", {"raw": raw}, maxlen=10_000)
+        except (aioredis.ConnectionError, aioredis.TimeoutError) as exc:
+            logger.error("Redis dead-letter write failed: %s", exc)

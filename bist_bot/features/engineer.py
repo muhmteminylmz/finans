@@ -63,13 +63,21 @@ class FeatureEngineer:
     def compute_features(self) -> dict[str, float]:
         """Compute all features for the current instant.
 
+        Uses the timestamp of the most recent tick as the reference point
+        so that feature windows are aligned to the live data stream rather
+        than to local wall-clock time.  This prevents window miscalculation
+        when feed timestamps lag behind or run ahead of the host clock.
+
         Also evicts ticks older than the largest configured window to keep
         memory usage bounded.
 
         Returns:
             A flat dictionary mapping feature name → float value.
         """
-        now_ts = pd.Timestamp.now("UTC").timestamp()
+        if self._tick_buffer:
+            now_ts = self._tick_buffer[-1][0]
+        else:
+            now_ts = pd.Timestamp.now("UTC").timestamp()
         max_window = max(self.windows)
 
         # Evict stale ticks.

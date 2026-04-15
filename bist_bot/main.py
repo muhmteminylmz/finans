@@ -46,6 +46,7 @@ import asyncio
 import importlib
 import logging
 import os
+import sys
 
 import redis.asyncio as aioredis
 
@@ -132,13 +133,14 @@ async def run(symbol: str) -> None:
         fe.ingest(tick)
         features = fe.compute_features()
         signal = signal_gen.generate(features)
-        exec_engine.execute(
-            signal=signal,
-            symbol=symbol,
-            entry_price=tick.price,
-            atr=atr_tracker.atr(),
-            portfolio_value=_get_portfolio_value(),
-        )
+        if signal.get("signal") != "FLAT":
+            exec_engine.execute(
+                signal=signal,
+                symbol=symbol,
+                entry_price=tick.price,
+                atr=atr_tracker.atr(),
+                portfolio_value=_get_portfolio_value(),
+            )
 
     ws_uri = os.environ["MATRIKS_WS_URI"]
     api_key = os.environ["MATRIKS_API_KEY"]
